@@ -107,6 +107,9 @@ class RobotConfig(object):
         # get IDs for connected motors
         used_configs = []
         for port in self.ports:
+            if port != "COM16": #Device manager determined the robot is on COM16 when connected
+                            continue
+
             if port == "":
                 print("No ports available")
                 sys.exit(1)
