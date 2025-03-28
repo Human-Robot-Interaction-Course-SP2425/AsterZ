@@ -43,11 +43,17 @@ def list_camera_ports():
         dev_port += 1
     return available_ports, working_ports, non_working_ports
 
-
+# found on github: https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/python/vision/gesture_recognizer.py#L66
 BaseOptions = mp.tasks.BaseOptions
 GestureRecognizer = mp.tasks.vision.GestureRecognizer
 GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
 GestureRecognizerResult = mp.tasks.vision.GestureRecognizerResult
+# GestureRecognizerResult
+#       gesture_results,
+#       handedness_results,
+#       hand_landmarks_results,
+#       hand_world_landmarks_results,
+
 VisionRunningMode = mp.tasks.vision.RunningMode
 
 
@@ -60,7 +66,7 @@ class BlossomRobot:
         mp_hands = mp.solutions.hands
         mp_drawing = mp.solutions.drawing_utils
         mp_drawing_styles = mp.solutions.drawing_styles
-
+        
         for hand_landmarks in result.hand_landmarks:
             hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
             hand_landmarks_proto.landmark.extend([
@@ -86,7 +92,15 @@ class BlossomRobot:
         self.options = GestureRecognizerOptions(
             base_options=BaseOptions(model_asset_path=path),
             running_mode=VisionRunningMode.LIVE_STREAM,
-            result_callback=callback_func)
+            result_callback=callback_func
+            )
+        
+        # self.options = GestureRecognizerOptions(
+        #     base_options=BaseOptions(model_asset_path=path),
+        #     running_mode=VisionRunningMode.LIVE_STREAM,
+        #     result_callback=callback_func,
+        #     num_hands=2)
+        #self.options.num_hands=2
 
     def run_seq(self, seq):
         for bot in start.robots:
