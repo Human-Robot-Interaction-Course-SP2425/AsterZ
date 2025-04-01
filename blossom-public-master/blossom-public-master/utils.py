@@ -102,12 +102,17 @@ class BlossomRobot:
         #     num_hands=2)
         #self.options.num_hands=2
 
+    # def run_seq(self, seq):
+    #     for bot in start.robots:
+    #         if bot.seq_thread != None and bot.seq_thread.is_alive():
+    #             continue
+    #         print("playing:", seq)
+    #         bot.play_recording(seq, idler=False)
     def run_seq(self, seq):
         for bot in start.robots:
-            if bot.seq_thread != None and bot.seq_thread.is_alive():
-                continue
-            print("playing:", seq)
-            bot.play_recording(seq, idler=False)
+            if bot.seq_thread is None or not bot.seq_thread.is_alive():
+                print("playing:", seq)
+                bot.play_recording(seq, idler=False)
 
 
 model = BlossomRobot()

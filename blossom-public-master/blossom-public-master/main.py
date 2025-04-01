@@ -4,6 +4,10 @@ from chatbot_pipline import *
 CAMERA_INDEX = 0  # run list_camera_ports() to choose which camera to use
 MIC_INDEX = 0  # run list_audio_devices() to choose which mic to use
 
+
+
+
+
 model_path = 'models/gesture_recognizer.task'
 
 hand_to_seq = {
@@ -36,7 +40,7 @@ handedness_to_seq = {
 #ILoveYou and Victory are the additional gestures
     # "Victory": "azcustom/evilGlareScream"
 
-
+# previous_react = "reset"
 
 # this function runs every time the model detects a gesture
 def on_detection(result: GestureRecognizerResult, output_image: mp.Image, timestamp_ms: int):
@@ -51,13 +55,15 @@ def on_detection(result: GestureRecognizerResult, output_image: mp.Image, timest
     print("hand: ", gesture_handedness)
 
     gesture_hand_combo = gesture_name + "_" +gesture_handedness
-
+    
     if gesture_hand_combo in handedness_to_seq:  #checking if the gesture name is in the dict
             print("gesture:", gesture_hand_combo, "-> running:", handedness_to_seq[gesture_hand_combo])
+            # if(handedness_to_seq[gesture_hand_combo] != previous_react):
+            #     run_seq("reset")  # running reset
             run_seq(handedness_to_seq[gesture_hand_combo])  # running the corresponding sequence
+            # previous_react = handedness_to_seq[gesture_hand_combo]
     # displays handtracking
     visualizer(result, output_image)
-
 
 
 
@@ -130,6 +136,9 @@ def on_detection(result: GestureRecognizerResult, output_image: mp.Image, timest
 def main():
     init_robot()
     init_model(model_path, on_detection)
+    # detectGesture = True
+    # delayBetweenDetectionCount = 0
+    # maxDelayBetweenDetection = 5
 
     # For webcam input:
     vid = cv2.VideoCapture(CAMERA_INDEX)
@@ -147,7 +156,18 @@ def main():
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
 
             # running the model
+  
             recognizer.recognize_async(mp_image, int(vid.get(cv2.CAP_PROP_POS_MSEC)))
+    
+            # if(detectGesture):
+            #     recognizer.recognize_async(mp_image, int(vid.get(cv2.CAP_PROP_POS_MSEC)))
+            #     delayBetweenDetectionCount= maxDelayBetweenDetection
+            #     detectGesture = False
+            # else:
+            #     delayBetweenDetectionCount-=1
+            #     if(delayBetweenDetectionCount<=0):
+            #         detectGesture=True
+
 
             if len(model.out_frame) != 0:
                 frame = model.out_frame
