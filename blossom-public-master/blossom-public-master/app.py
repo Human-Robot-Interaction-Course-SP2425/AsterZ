@@ -52,7 +52,7 @@ def get_args():
 
 
 def main():
-    init_robot()
+    # init_robot()
     # Argument parsing #################################################################
     args = get_args()
 
