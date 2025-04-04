@@ -25,7 +25,8 @@ hand_to_seq = {
     "Pointer": "no",
     "OK": "happy",
     "Peace": "fear",
-    "Love": "happy_dance"
+    "Love": "happy_dance",
+    "Scout": "happy_daydream"
 }
 
 
@@ -188,7 +189,7 @@ def main():
                     label = keypoint_classifier_labels[hand_sign_id]
                     #print(type(label))
                     #print(hand_to_seq[label])
-                    run_seq(hand_to_seq[label])
+                    #run_seq(hand_to_seq[label]) #run sequence animation
         else:
             point_history.append([0, 0])
 
