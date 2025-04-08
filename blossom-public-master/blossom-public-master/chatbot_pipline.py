@@ -10,6 +10,9 @@ from pygame import mixer
 import os
 from dotenv import load_dotenv
 
+#global variable
+runChat=1
+
 
 def list_audio_devices():
     """
@@ -93,7 +96,7 @@ class ChatBot:
         )
         listener.start()
         try:
-            print("Press and hold the space bar to record.")
+            print("Press and hold the space bar to record a message. To stop the program, say \"End conversation.\"")
             record_audio()
         except KeyboardInterrupt:
             print("Exiting...")
@@ -166,10 +169,18 @@ class ChatBot:
         # print(f"output file: {res}")
 
         transcribed_text = self.speech2text(res, speech2text_model)
+       
+
         print(f"[transcribed text]: {transcribed_text}")
+        toneString =  "Please respond with \"Happy\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + transcribed_text
+        tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
+        print(f"[Tone of prompt]: {tone_response}")
 
         text_response = self.prompt_gpt(transcribed_text, self.preprompt, chat_model)
         print(f"[{chat_model} response]: {text_response}")
+        toneString =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
+        tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
+        print(f"[Tone of response]: {tone_response}")
 
         filename = self.text2speech(text_response, text2speech_model, text2speech_voice)
         # print(f"output file {filename}")
@@ -199,14 +210,22 @@ if __name__ == '__main__':
 
     # input selected audio device index
     cb = ChatBot(mic_index=MIC_INDEX)
+    while runChat==1:
+            transcribed_text, response, old_convo = cb.run_pipline()
+            if(transcribed_text == "End conversation."):
+                runChat=0
 
-    # run the chatbot
-    cb.run_pipline()
+    # # run the chatbot
+    # cb.run_pipline()
 
-    # run the chat bot again
-    transcribed_text, response, old_convo = cb.run_pipline()
+    # # run the chat bot again
+    # transcribed_text, response, old_convo = cb.run_pipline()
 
-    # print result
-    print("\n---convo log:---")
-    print(transcribed_text, response, old_convo)
+    # # print result
+    # print("\n---convo log:---")
+    # print(transcribed_text, response, old_convo)
+ 
+
+
+
 
