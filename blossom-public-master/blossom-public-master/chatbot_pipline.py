@@ -103,7 +103,7 @@ class ChatBot:
 
         return "./test.wav"
 
-    def speach2text(self, filename, model="whisper-1") -> str:
+    def speech2text(self, filename, model="whisper-1") -> str:
         """
         Returns:
             transcribed text
@@ -165,7 +165,7 @@ class ChatBot:
         print("---")
         # print(f"output file: {res}")
 
-        transcribed_text = self.speach2text(res, speech2text_model)
+        transcribed_text = self.speech2text(res, speech2text_model)
         print(f"[transcribed text]: {transcribed_text}")
 
         text_response = self.prompt_gpt(transcribed_text, self.preprompt, chat_model)
