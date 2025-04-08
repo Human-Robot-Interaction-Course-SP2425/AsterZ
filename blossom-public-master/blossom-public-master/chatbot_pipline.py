@@ -10,6 +10,11 @@ from pygame import mixer
 import os
 from dotenv import load_dotenv
 
+from utilities import *
+from time import sleep
+
+
+
 #global variable
 runChat=1
 
@@ -29,6 +34,25 @@ def list_audio_devices():
     print("")
 
     return len(PvRecorder.get_available_devices())
+
+
+def runToneSequence(tone):
+    if(tone=="Happy"):
+        run_seq("happy")
+    if(tone=="Sad"):
+        run_seq("sad")
+    if(tone =="Angry"):
+        run_seq("anger_cross")
+    if(tone =="Anxious"):
+        run_seq("fear_faint")
+    if(tone =="Yes"):
+        run_seq("yes")
+    if(tone =="No"):
+        run_seq("no")
+    if(tone =="Excited"):
+        run_seq("happy_bounce")
+
+
 
 
 class ChatBot:
@@ -181,7 +205,7 @@ class ChatBot:
         toneString =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
         tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
         print(f"[Tone of response]: {tone_response}")
-
+        runToneSequence(tone_response)
         filename = self.text2speech(text_response, text2speech_model, text2speech_voice)
         # print(f"output file {filename}")
 
@@ -195,6 +219,9 @@ class ChatBot:
 
 
 if __name__ == '__main__':
+    init_robot()
+
+
     # example usage
 
     # list all audio devices
