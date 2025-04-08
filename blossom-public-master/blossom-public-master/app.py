@@ -26,8 +26,12 @@ hand_to_seq = {
     "OK": "happy",
     "Peace": "fear",
     "Love": "happy_dance",
-    "Scout": "happy_daydream"
+    "Scout": "yes",
+    "ThumbsUp": "happy_daydream",
+    "ThumbsDown": "azcustom/evilGlareScream",
+    "Neutral": "fear_faint"
 }
+
 
 
 def get_args():
@@ -53,7 +57,7 @@ def get_args():
 
 
 def main():
-    # init_robot()
+    init_robot()
     # Argument parsing #################################################################
     args = get_args()
 
@@ -189,7 +193,7 @@ def main():
                     label = keypoint_classifier_labels[hand_sign_id]
                     #print(type(label))
                     #print(hand_to_seq[label])
-                    #run_seq(hand_to_seq[label]) #run sequence animation
+                    run_seq(hand_to_seq[label]) #run sequence animation
         else:
             point_history.append([0, 0])
 
