@@ -139,13 +139,12 @@ class ChatBot:
             speech output filename
         """
         speech_file_path = Path(__file__).parent / "speech.mp3"
-        response = self.client.audio.speech.create(
+        with self.client.audio.speech.with_streaming_response.create(
             model=model,
             voice=voice,
             input=prompt_output
-        )
-
-        response.stream_to_file(speech_file_path)
+        ) as response:
+            response.stream_to_file(speech_file_path)
 
         mixer.init()
         mixer.music.load("speech.mp3")
