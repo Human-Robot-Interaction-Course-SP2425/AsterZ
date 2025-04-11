@@ -37,20 +37,37 @@ def list_audio_devices():
 
 
 def runToneSequence(tone):
-    if(tone=="Happy"):
+    toneLCase = tone.lower()
+    if("happy" in toneLCase):
         run_seq("happy")
-    if(tone=="Sad"):
+    if("sad" in toneLCase):
         run_seq("sad")
-    if(tone =="Angry"):
+    if("angry" in toneLCase):
         run_seq("anger_cross")
-    if(tone =="Anxious"):
+    if("anxious" in toneLCase):
         run_seq("fear_faint")
-    if(tone =="Yes"):
+    if("yes" in toneLCase):
         run_seq("yes")
-    if(tone =="No"):
+    if("no" in toneLCase):
         run_seq("no")
-    if(tone =="Excited"):
+    if("excited" in toneLCase):
         run_seq("happy_bounce")
+
+
+    # if(tone=="Happy" or tone =="Happy." or tone == "Happy!"):
+    #     run_seq("happy")
+    # if(tone=="Sad"or tone =="Sad." or tone == "Sad!"):
+    #     run_seq("sad")
+    # if(tone =="Angry"or tone =="Angry." or tone == "Angry!"):
+    #     run_seq("anger_cross")
+    # if(tone =="Anxious" or tone =="Anxious." or tone == "Anxious!"):
+    #     run_seq("fear_faint")
+    # if(tone =="Yes" or tone =="Yes." or tone == "Yes!"):
+    #     run_seq("yes")
+    # if(tone =="No" or tone =="No." or tone == "No!"):
+    #     run_seq("no")
+    # if(tone =="Excited" or tone =="Excited." or tone == "Excited!"):
+    #     run_seq("happy_bounce")
 
 
 
@@ -199,13 +216,16 @@ class ChatBot:
         toneString =  "Please respond with \"Happy\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + transcribed_text
         tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
         print(f"[Tone of prompt]: {tone_response}")
+        runToneSequence(tone_response)
 
         text_response = self.prompt_gpt(transcribed_text, self.preprompt, chat_model)
+
         print(f"[{chat_model} response]: {text_response}")
-        toneString =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
-        tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
+
+       # toneString =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
+       # tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
         print(f"[Tone of response]: {tone_response}")
-        runToneSequence(tone_response)
+        # runToneSequence(tone_response)
         filename = self.text2speech(text_response, text2speech_model, text2speech_voice)
         # print(f"output file {filename}")
 
