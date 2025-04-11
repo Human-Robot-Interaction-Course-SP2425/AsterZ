@@ -208,27 +208,24 @@ class ChatBot:
         res = self.record_audio()
         print("---")
         # print(f"output file: {res}")
-
-        transcribed_text = self.speech2text(res, speech2text_model)
-       
-
-        print(f"[transcribed text]: {transcribed_text}")
-        toneString =  "Please respond with \"Happy\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + transcribed_text
-        tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
-        print(f"[Tone of prompt]: {tone_response}")
-        runToneSequence(tone_response)
-
+        transcribed_text = self.speech2text(res, speech2text_model) #Convert Human Message Speech to Text
+        print(f"[transcribed text]: {transcribed_text}") #Print Transcription of Human Message
+        # ~~~~ Interpret Tone of Human's Mesage ~~~~~
+        toneString_H =  "Please respond with \"Happy\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + transcribed_text
+        tone_response_H = self.prompt_gpt(toneString_H,self.preprompt,chat_model)
+        print(f"[Tone of prompt]: {tone_response_H}")
+        runToneSequence(tone_response_H) #React to reflect the tone of Human's Message
+        # ~~~~ Respond to Human message ~~~~~~
         text_response = self.prompt_gpt(transcribed_text, self.preprompt, chat_model)
-
         print(f"[{chat_model} response]: {text_response}")
-
-       # toneString =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
-       # tone_response = self.prompt_gpt(toneString,self.preprompt,chat_model)
-        print(f"[Tone of response]: {tone_response}")
-        # runToneSequence(tone_response)
+        #~~~~Interpret Tone of Robot's Response~~~~~
+        # toneString_R =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
+        # tone_response_R = self.prompt_gpt(toneString_R,self.preprompt,chat_model)
+        #print(f"[Tone of response]: {tone_response_R}")
+        # runToneSequence(tone_response_R)
         filename = self.text2speech(text_response, text2speech_model, text2speech_voice)
         # print(f"output file {filename}")
-
+        # ~~~ Record Conversation History ~~~
         self.preprompt += f"""
         past input:
             {transcribed_text}
