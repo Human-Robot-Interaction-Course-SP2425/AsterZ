@@ -9,12 +9,45 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import os
+
+from time import sleep
+from utilities import *
+
+init_robot()
+
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # command line argument
 ap = argparse.ArgumentParser()
 ap.add_argument("--mode",help="train/display")
 mode = ap.parse_args().mode
+
+def runEmotionSequence(emotion):
+    match emotion:
+        case("Angry"):
+            run_seq("anger_cross")
+        case ("Disgusted"):
+            run_seq("no")
+
+        case ("Fearful"):
+            run_seq("fear_faint")
+
+        case("Happy"):
+            run_seq("happy")
+
+        case("Neutral"):
+            run_seq("reset")
+
+        case("Sad"):
+            run_seq("sad")
+
+        case("Surprised"):
+            run_seq("happy_bounce")
+
+        case _:
+            run_seq("reset")
+
 
 # plots accuracy and loss curves
 def plot_model_history(model_history):
@@ -126,6 +159,8 @@ elif mode == "display":
             prediction = model.predict(cropped_img)
             maxindex = int(np.argmax(prediction))
             cv2.putText(frame, emotion_dict[maxindex], (x+20, y-60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            runEmotionSequence(emotion_dict[maxindex])
+            
 
         cv2.imshow('Video', cv2.resize(frame,(1600,960),interpolation = cv2.INTER_CUBIC))
         if cv2.waitKey(1) & 0xFF == ord('q'):

@@ -15,3 +15,9 @@ openai==1.40.0
 pygame
 python-dotenv==1.0.1
 mediapipe==0.10.14
+
+
+#for emotions
+numpy==1.22.0
+opencv-python==4.2.0.32
+tensorflow==2.9.3
