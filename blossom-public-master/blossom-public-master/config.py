@@ -107,8 +107,12 @@ class RobotConfig(object):
         # get IDs for connected motors
         used_configs = []
         for port in self.ports:
+           #Aster
             if port != "COM16": #Device manager determined the robot is on COM16 when connected
                             continue
+            ##Shaina
+            # if port != "COM15": #Device manager determined the robot is on COM16 when connected
+            #                     continue
 
             if port == "":
                 print("No ports available")
