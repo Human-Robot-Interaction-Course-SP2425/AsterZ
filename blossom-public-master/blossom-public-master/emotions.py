@@ -149,7 +149,8 @@ def main():
     # start the webcam feed
     cap = cv2.VideoCapture(0)
     emotion = "Neutral"
-
+    previousEmotion = "Neutral"
+    emotionDuration =0
     while True:
         # Find haar cascade to draw bounding box around face
         ret, frame = cap.read()
@@ -166,10 +167,16 @@ def main():
             maxindex = int(np.argmax(prediction))
             cv2.putText(frame, emotion_dict[maxindex], (x+20, y-60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
             emotion = emotion_dict[maxindex]
+            if(emotion==previousEmotion): 
+                emotionDuration+=1
+            else:
+                emotionDuration=0
+                previousEmotion=emotion
          
         cv2.imshow('Video', cv2.resize(frame,(1600,960),interpolation = cv2.INTER_CUBIC))
-        runEmotionSequence(emotion)
-        sleep(0.1)
+        if(emotionDuration>=5):
+            runEmotionSequence(emotion)
+        # sleep(0.1)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
