@@ -1,3 +1,4 @@
+#reference: https://github.com/atulapra/Emotion-detection 
 from time import sleep
 from utilities import *
 
@@ -151,6 +152,7 @@ def main():
     emotion = "Neutral"
     previousEmotion = "Neutral"
     emotionDuration =0
+    emotionMinDurationToReact =2
     while True:
         # Find haar cascade to draw bounding box around face
         ret, frame = cap.read()
@@ -174,7 +176,7 @@ def main():
                 previousEmotion=emotion
          
         cv2.imshow('Video', cv2.resize(frame,(1600,960),interpolation = cv2.INTER_CUBIC))
-        if(emotionDuration>=5):
+        if(emotionDuration>=emotionMinDurationToReact):
             runEmotionSequence(emotion)
         # sleep(0.1)
 
