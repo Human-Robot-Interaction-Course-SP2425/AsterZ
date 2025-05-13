@@ -821,7 +821,11 @@ if __name__ == '__main__':
                     label = keypoint_classifier_labels[hand_sign_id]
                     #print(type(label))
                     #print(hand_to_seq[label])
+                    oldStyle = fortuneTellerStyle
                     fortuneTellerStyle=(hand_to_style[label])
+                    if(fortuneTellerStyle!= oldStyle):
+                        print("currently selected style: \t" + fortuneTellerStyle +"\n")
+                    
         else:
             point_history.append([0, 0])
 
