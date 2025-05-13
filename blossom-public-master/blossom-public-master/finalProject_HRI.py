@@ -36,6 +36,9 @@ from utilities import *
 from time import sleep
 
 
+#global vars
+fortuneTellerStyle = "normal magic 8 ball"
+
 
 #### Functions from chatbot_pipline.py #######
 
@@ -235,6 +238,27 @@ class ChatBot:
             {text_response}\n
         """
         return transcribed_text, text_response, self.preprompt
+    
+    def setup_pipline_style(self, speech2text_model="whisper-1", chat_model="gpt-4o-mini", text2speech_model="tts-1",
+                    text2speech_voice="alloy"):
+        res = self.record_audio()
+        print("---")
+        # print(f"output file: {res}")
+        setUpStylePrompt = "Please respond like you are a magic 8 ball in the style of " + fortuneTellerStyle
+        print(f"[Setup prompt]: {setUpStylePrompt}")
+        # ~~~~ Interpret Tone of Human's Mesage ~~~~~
+        setUpStyleResponse = self.prompt_gpt(setUpStylePrompt,self.preprompt,chat_model)
+        print(f"[{chat_model} response]: {setUpStyleResponse}")
+        self.text2speech(setUpStyleResponse, text2speech_model, text2speech_voice)
+
+        # ~~~ Record Conversation History ~~~
+        self.preprompt += f"""
+        past input:
+            {setUpStylePrompt}
+        past response:
+            {setUpStyleResponse}\n
+        """
+        return setUpStylePrompt, setUpStyleResponse, self.preprompt
 #############################################
 
 ### Functions from app.py ###################
@@ -636,7 +660,6 @@ def draw_info(image, fps, mode, number):
 
 if __name__ == '__main__':
     init_robot()
-    fortuneTellerStyle = "normal magic 8 ball"
 
     # Set up Camera & Gesture Recognizer ################################
         # Argument parsing #################################################################
@@ -808,14 +831,16 @@ if __name__ == '__main__':
         # Screen reflection #############################################################
         cv.imshow('Hand Gesture Recognition', debug_image)
 
+    #close webcam since style was selected with gesture
     cap.release()
     cv.destroyAllWindows()
 
+    #configure chat model to reflect the FortuneTellerStyle setup_pipline_style
+    transcribed_text, response, old_convo = cb.setup_pipline_style()
 
     predictionsRemaining = 3
     #conversation
     while predictionsRemaining>0:
-            #TODO - incorporate fortuneTellerStyle
             transcribed_text, response, old_convo = cb.run_pipline()
             predictionsRemaining-=1
 
