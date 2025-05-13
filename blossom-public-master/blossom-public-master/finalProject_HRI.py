@@ -1,0 +1,826 @@
+#imports from app.py (gesture detection)
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import csv
+import copy
+import argparse
+import itertools
+from collections import Counter
+from collections import deque
+
+import cv2 as cv
+import numpy as np
+import mediapipe as mp
+
+from utils import CvFpsCalc
+from model import KeyPointClassifier
+from model import PointHistoryClassifier
+
+from chatbot_pipline import *
+
+#imports from chatbot_pipline.py (conversation)
+
+from pynput.keyboard import Listener, Key
+from pynput import keyboard
+from pvrecorder import PvRecorder
+import struct
+import wave
+from openai import OpenAI
+from pathlib import Path
+import time
+from pygame import mixer
+import os
+from dotenv import load_dotenv
+
+from utilities import *
+from time import sleep
+
+
+
+#### Functions from chatbot_pipline.py #######
+
+def list_audio_devices():
+    """
+    list which mic index are available
+
+    can be used to find out what number to put in the mic_index
+    |
+    |
+    v
+    ChatBot(mic_index=5)
+    """
+    for index, device in enumerate(PvRecorder.get_available_devices()):
+        print(f"[{index}] {device}")
+    print("")
+
+    return len(PvRecorder.get_available_devices())
+
+
+def runToneSequence(tone):
+    toneLCase = tone.lower()
+    if("happy" in toneLCase):
+        run_seq("happy")
+    if("sad" in toneLCase):
+        run_seq("sad")
+    if("angry" in toneLCase):
+        run_seq("anger_cross")
+    if("anxious" in toneLCase):
+        run_seq("fear_faint")
+    if("yes" in toneLCase):
+        run_seq("yes")
+    if("no" in toneLCase):
+        run_seq("no")
+    if("excited" in toneLCase):
+        run_seq("happy_bounce")
+
+
+class ChatBot:
+    def __init__(self, mic_index):
+        self.preprompt = """
+        Keep this response as a short and concise message as if you
+        were talking to someone one to one.
+        The following text has been taking in from an audio transcription
+        so also watch out for weird spellings:
+        """
+        load_dotenv()
+        self.client = OpenAI(
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+        self.mic_index = mic_index
+
+    def record_audio(self) -> str:
+        """
+        Returns:
+            file name saved to
+        """
+        recorder = PvRecorder(device_index=self.mic_index, frame_length=512)
+
+        # Flag to control recording state
+        is_recording = False
+        audio = []
+
+        # Define callback functions for key press and release
+        def on_press(key):
+            nonlocal is_recording, audio
+            if key == keyboard.Key.space and not is_recording:
+                print("Recording...")
+                recorder.start()
+                is_recording = True
+                audio = []
+
+        def on_release(key):
+            nonlocal is_recording
+            if key == keyboard.Key.space and is_recording:
+                print("Finished recording.")
+                recorder.stop()
+                is_recording = False
+
+                print("saving to test.wav")
+                with wave.open("./test.wav", 'w') as f:
+                    f.setparams((1, 2, 16000, 512, "NONE", "NONE"))
+                    f.writeframes(struct.pack("h" * len(audio), *audio))
+
+        # Collect events until released
+        def record_audio():
+            nonlocal is_recording, audio
+            temp = False
+            while True:
+                if is_recording:
+                    frame = recorder.read()
+                    audio.extend(frame)
+                    temp = True
+                if temp and not is_recording:
+                    break
+
+        # Start listening to keyboard events
+        listener = Listener(
+            on_press=on_press,
+            on_release=on_release
+        )
+        listener.start()
+        try:
+            print("Press and hold the space bar to record a message. To stop the program, say \"End conversation.\"")
+            record_audio()
+        except KeyboardInterrupt:
+            print("Exiting...")
+        finally:
+            listener.stop()
+            recorder.delete()
+
+        return "./test.wav"
+
+    def speech2text(self, filename, model="whisper-1") -> str:
+        """
+        Returns:
+            transcribed text
+        """
+
+        audio_file = open(filename, "rb")
+        transcription = self.client.audio.transcriptions.create(
+            model=model,
+            file=audio_file
+        )
+        # print(transcription.text)
+        return transcription.text
+
+    def prompt_gpt(self, text, input_prompt, model="gpt-4o-mini") -> str:
+        """
+        Return:
+            chatgpt string response
+        """
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=[
+                # {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user",
+                 "content": input_prompt + text
+                 }
+            ]
+        )
+        return response.choices[0].message.content
+
+    def text2speech(self, prompt_output, model="tts-1", voice="alloy") -> str:
+        """
+        Return:
+            speech output filename
+        """
+        speech_file_path = Path(__file__).parent / "speech.mp3"
+        with self.client.audio.speech.with_streaming_response.create(
+            model=model,
+            voice=voice,
+            input=prompt_output
+        ) as response:
+            response.stream_to_file(speech_file_path)
+
+        mixer.init()
+        mixer.music.load("speech.mp3")
+        mixer.music.play()
+        while mixer.music.get_busy():
+            time.sleep(1)
+        mixer.music.stop()
+        mixer.quit()
+
+        os.remove("speech.mp3")
+
+
+        return "speech.mp3"
+
+    def run_pipline(self, speech2text_model="whisper-1", chat_model="gpt-4o-mini", text2speech_model="tts-1",
+                    text2speech_voice="alloy"):
+        res = self.record_audio()
+        print("---")
+        # print(f"output file: {res}")
+        transcribed_text = self.speech2text(res, speech2text_model) #Convert Human Message Speech to Text
+        print(f"[transcribed text]: {transcribed_text}") #Print Transcription of Human Message
+        # ~~~~ Interpret Tone of Human's Mesage ~~~~~
+        toneString_H =  "Please respond with \"Happy\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + transcribed_text
+        tone_response_H = self.prompt_gpt(toneString_H,self.preprompt,chat_model)
+        print(f"[Tone of prompt]: {tone_response_H}")
+        runToneSequence(tone_response_H) #React to reflect the tone of Human's Message
+        # ~~~~ Respond to Human message ~~~~~~
+        text_response = self.prompt_gpt(transcribed_text, self.preprompt, chat_model)
+        print(f"[{chat_model} response]: {text_response}")
+        #~~~~Interpret Tone of Robot's Response~~~~~
+        # toneString_R =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
+        # tone_response_R = self.prompt_gpt(toneString_R,self.preprompt,chat_model)
+        #print(f"[Tone of response]: {tone_response_R}")
+        # runToneSequence(tone_response_R)
+        self.text2speech(text_response, text2speech_model, text2speech_voice)
+        
+        # ~~~ Record Conversation History ~~~
+        self.preprompt += f"""
+        past input:
+            {transcribed_text}
+        past response:
+            {text_response}\n
+        """
+        return transcribed_text, text_response, self.preprompt
+#############################################
+
+### Functions from app.py ###################
+#Mappings
+hand_to_seq = {
+    "Open": "reset",
+    "Close": "sad",
+    "Pointer": "no",
+    "OK": "happy",
+    "Peace": "fear",
+    "Love": "happy_dance",
+    "Scout": "yes",
+    "ThumbsUp": "happy_daydream",
+    "ThumbsDown": "azcustom/evilGlareScream",
+    "Neutral": "fear_faint"
+}
+hand_to_style = {
+    "Open": "Gordon Ramsay",
+    "Close": "marvel superhero",
+    "Pointer": "William Shakespeare",
+    "OK": "nerdy scientist or engineer",
+    "Peace": "Gen Z slang",
+    "Love": "therapist",
+    "Scout": "Jurassic park tour guide",
+    "ThumbsUp": "only respond with puns",
+    "ThumbsDown": " dr doofenshmirtz from phineas and ferb",
+    "Neutral": "reset"
+}
+
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--width", help='cap width', type=int, default=960)
+    parser.add_argument("--height", help='cap height', type=int, default=540)
+
+    parser.add_argument('--use_static_image_mode', action='store_true')
+    parser.add_argument("--min_detection_confidence",
+                        help='min_detection_confidence',
+                        type=float,
+                        default=0.7)
+    parser.add_argument("--min_tracking_confidence",
+                        help='min_tracking_confidence',
+                        type=int,
+                        default=0.5)
+
+    args = parser.parse_args()
+
+    return args
+
+def select_mode(key, mode):
+    number = -1
+    if 48 <= key <= 57:  # 0 ~ 9
+        number = key - 48
+    if key == 110:  # n
+        mode = 0
+    if key == 107:  # k
+        mode = 1
+    if key == 104:  # h
+        mode = 2
+    return number, mode
+
+def calc_bounding_rect(image, landmarks):
+    image_width, image_height = image.shape[1], image.shape[0]
+
+    landmark_array = np.empty((0, 2), int)
+
+    for _, landmark in enumerate(landmarks.landmark):
+        landmark_x = min(int(landmark.x * image_width), image_width - 1)
+        landmark_y = min(int(landmark.y * image_height), image_height - 1)
+
+        landmark_point = [np.array((landmark_x, landmark_y))]
+
+        landmark_array = np.append(landmark_array, landmark_point, axis=0)
+
+    x, y, w, h = cv.boundingRect(landmark_array)
+
+    return [x, y, x + w, y + h]
+
+def calc_landmark_list(image, landmarks):
+    image_width, image_height = image.shape[1], image.shape[0]
+
+    landmark_point = []
+
+    # Keypoint
+    for _, landmark in enumerate(landmarks.landmark):
+        landmark_x = min(int(landmark.x * image_width), image_width - 1)
+        landmark_y = min(int(landmark.y * image_height), image_height - 1)
+        # landmark_z = landmark.z
+
+        landmark_point.append([landmark_x, landmark_y])
+
+    return landmark_point
+
+def pre_process_landmark(landmark_list):
+    temp_landmark_list = copy.deepcopy(landmark_list)
+
+    # Convert to relative coordinates
+    base_x, base_y = 0, 0
+    for index, landmark_point in enumerate(temp_landmark_list):
+        if index == 0:
+            base_x, base_y = landmark_point[0], landmark_point[1]
+
+        temp_landmark_list[index][0] = temp_landmark_list[index][0] - base_x
+        temp_landmark_list[index][1] = temp_landmark_list[index][1] - base_y
+
+    # Convert to a one-dimensional list
+    temp_landmark_list = list(
+        itertools.chain.from_iterable(temp_landmark_list))
+
+    # Normalization
+    max_value = max(list(map(abs, temp_landmark_list)))
+
+    def normalize_(n):
+        return n / max_value
+
+    temp_landmark_list = list(map(normalize_, temp_landmark_list))
+
+    return temp_landmark_list
+
+def pre_process_point_history(image, point_history):
+    image_width, image_height = image.shape[1], image.shape[0]
+
+    temp_point_history = copy.deepcopy(point_history)
+
+    # Convert to relative coordinates
+    base_x, base_y = 0, 0
+    for index, point in enumerate(temp_point_history):
+        if index == 0:
+            base_x, base_y = point[0], point[1]
+
+        temp_point_history[index][0] = (temp_point_history[index][0] -
+                                        base_x) / image_width
+        temp_point_history[index][1] = (temp_point_history[index][1] -
+                                        base_y) / image_height
+
+    # Convert to a one-dimensional list
+    temp_point_history = list(
+        itertools.chain.from_iterable(temp_point_history))
+
+    return temp_point_history
+
+def logging_csv(number, mode, landmark_list, point_history_list):
+    if mode == 0:
+        pass
+    if mode == 1 and (0 <= number <= 9):
+        csv_path = 'model/keypoint_classifier/keypoint.csv'
+        with open(csv_path, 'a', newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([number, *landmark_list])
+    if mode == 2 and (0 <= number <= 9):
+        csv_path = 'model/point_history_classifier/point_history.csv'
+        with open(csv_path, 'a', newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([number, *point_history_list])
+    return
+
+def draw_landmarks(image, landmark_point):
+    if len(landmark_point) > 0:
+        # Thumb
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[3]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[3]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[3]), tuple(landmark_point[4]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[3]), tuple(landmark_point[4]),
+                (255, 255, 255), 2)
+
+        # Index finger
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[6]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[6]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[6]), tuple(landmark_point[7]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[6]), tuple(landmark_point[7]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[7]), tuple(landmark_point[8]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[7]), tuple(landmark_point[8]),
+                (255, 255, 255), 2)
+
+        # Middle finger
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[10]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[10]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[10]), tuple(landmark_point[11]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[10]), tuple(landmark_point[11]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[11]), tuple(landmark_point[12]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[11]), tuple(landmark_point[12]),
+                (255, 255, 255), 2)
+
+        # Ring finger
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[14]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[14]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[14]), tuple(landmark_point[15]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[14]), tuple(landmark_point[15]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[15]), tuple(landmark_point[16]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[15]), tuple(landmark_point[16]),
+                (255, 255, 255), 2)
+
+        # Little finger
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[18]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[18]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[18]), tuple(landmark_point[19]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[18]), tuple(landmark_point[19]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[19]), tuple(landmark_point[20]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[19]), tuple(landmark_point[20]),
+                (255, 255, 255), 2)
+
+        # Palm
+        cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[0]), tuple(landmark_point[1]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[1]), tuple(landmark_point[2]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[2]), tuple(landmark_point[5]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[5]), tuple(landmark_point[9]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[9]), tuple(landmark_point[13]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[13]), tuple(landmark_point[17]),
+                (255, 255, 255), 2)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]),
+                (0, 0, 0), 6)
+        cv.line(image, tuple(landmark_point[17]), tuple(landmark_point[0]),
+                (255, 255, 255), 2)
+
+    # Key Points
+    for index, landmark in enumerate(landmark_point):
+        if index == 0:  # 手首1
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 1:  # 手首2
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 2:  # 親指：付け根
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 3:  # 親指：第1関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 4:  # 親指：指先
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 5:  # 人差指：付け根
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 6:  # 人差指：第2関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 7:  # 人差指：第1関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 8:  # 人差指：指先
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 9:  # 中指：付け根
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 10:  # 中指：第2関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 11:  # 中指：第1関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 12:  # 中指：指先
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 13:  # 薬指：付け根
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 14:  # 薬指：第2関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 15:  # 薬指：第1関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 16:  # 薬指：指先
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+        if index == 17:  # 小指：付け根
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 18:  # 小指：第2関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 19:  # 小指：第1関節
+            cv.circle(image, (landmark[0], landmark[1]), 5, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 5, (0, 0, 0), 1)
+        if index == 20:  # 小指：指先
+            cv.circle(image, (landmark[0], landmark[1]), 8, (255, 255, 255),
+                      -1)
+            cv.circle(image, (landmark[0], landmark[1]), 8, (0, 0, 0), 1)
+
+    return image
+
+def draw_bounding_rect(use_brect, image, brect):
+    if use_brect:
+        # Outer rectangle
+        cv.rectangle(image, (brect[0], brect[1]), (brect[2], brect[3]),
+                     (0, 0, 0), 1)
+
+    return image
+
+def draw_info_text(image, brect, handedness, hand_sign_text,
+                   finger_gesture_text):
+    cv.rectangle(image, (brect[0], brect[1]), (brect[2], brect[1] - 22),
+                 (0, 0, 0), -1)
+
+    info_text = handedness.classification[0].label[0:]
+    if hand_sign_text != "":
+        info_text = info_text + ':' + hand_sign_text
+    cv.putText(image, info_text, (brect[0] + 5, brect[1] - 4),
+               cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv.LINE_AA)
+
+    if finger_gesture_text != "":
+        cv.putText(image, "Finger Gesture:" + finger_gesture_text, (10, 60),
+                   cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 4, cv.LINE_AA)
+        cv.putText(image, "Finger Gesture:" + finger_gesture_text, (10, 60),
+                   cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2,
+                   cv.LINE_AA)
+
+    return image
+
+def draw_point_history(image, point_history):
+    for index, point in enumerate(point_history):
+        if point[0] != 0 and point[1] != 0:
+            cv.circle(image, (point[0], point[1]), 1 + int(index / 2),
+                      (152, 251, 152), 2)
+
+    return image
+
+def draw_info(image, fps, mode, number):
+    cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
+               1.0, (0, 0, 0), 4, cv.LINE_AA)
+    cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
+               1.0, (255, 255, 255), 2, cv.LINE_AA)
+
+    mode_string = ['Logging Key Point', 'Logging Point History']
+    if 1 <= mode <= 2:
+        cv.putText(image, "MODE:" + mode_string[mode - 1], (10, 90),
+                   cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
+                   cv.LINE_AA)
+        if 0 <= number <= 9:
+            cv.putText(image, "NUM:" + str(number), (10, 110),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
+                       cv.LINE_AA)
+    return image
+#############################################
+
+
+if __name__ == '__main__':
+    init_robot()
+    fortuneTellerStyle = "normal magic 8 ball"
+
+    # Set up Camera & Gesture Recognizer ################################
+        # Argument parsing #################################################################
+    args = get_args()
+
+    cap_device = args.device
+    cap_width = args.width
+    cap_height = args.height
+
+    use_static_image_mode = args.use_static_image_mode
+    min_detection_confidence = args.min_detection_confidence
+    min_tracking_confidence = args.min_tracking_confidence
+
+    use_brect = True
+
+    # Camera preparation ###############################################################
+    cap = cv.VideoCapture(cap_device)
+    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
+    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+
+    # Model load #############################################################
+    mp_hands = mp.solutions.hands
+    hands = mp_hands.Hands(
+        static_image_mode=use_static_image_mode,
+        max_num_hands=1,
+        min_detection_confidence=min_detection_confidence,
+        min_tracking_confidence=min_tracking_confidence,
+    )
+
+    keypoint_classifier = KeyPointClassifier()
+
+    point_history_classifier = PointHistoryClassifier()
+
+    # Read labels ###########################################################
+    with open('model/keypoint_classifier/keypoint_classifier_label.csv',
+              encoding='utf-8-sig') as f:
+        keypoint_classifier_labels = csv.reader(f)
+        keypoint_classifier_labels = [
+            row[0] for row in keypoint_classifier_labels
+        ]
+    with open(
+            'model/point_history_classifier/point_history_classifier_label.csv',
+            encoding='utf-8-sig') as f:
+        point_history_classifier_labels = csv.reader(f)
+        point_history_classifier_labels = [
+            row[0] for row in point_history_classifier_labels
+        ]
+
+    # FPS Measurement ########################################################
+    cvFpsCalc = CvFpsCalc(buffer_len=10)
+
+    # Coordinate history #################################################################
+    history_length = 16
+    point_history = deque(maxlen=history_length)
+
+    # Finger gesture history ################################################
+    finger_gesture_history = deque(maxlen=history_length)
+    mode = 0
+
+    #  ########################################################################
+
+
+    # example usage
+    # list all audio devices
+    print("== pick you audio device ==\n")
+    num_dev = list_audio_devices()
+
+ 
+    while True:
+        num = input(f"choose from 0-{num_dev-1}: ")
+        if num.isnumeric() and int(num) in range(0, num_dev):
+            break
+        print("not a valid input :\ \n")
+
+    MIC_INDEX = int(num) # run list_audio_devices() to choose which mic to use
+
+    # input selected audio device index
+    cb = ChatBot(mic_index=MIC_INDEX)
+       #introduce robot
+    introductionMessage = "Hi! My name is Pebbles! I am your customizable yet unreliable fortune teller! You can make hand gestures to change the vibe. " \
+    "I hereby grant you 3 magical predictions." \
+    "To select your preferred fortune style, make the corresponding gesture in the camera. Once it is detected, press the escape key"
+    cb.text2speech(introductionMessage,"tts-1","alloy")
+
+    # Select style ~~~~~~~
+    while True:
+        fps = cvFpsCalc.get()
+
+        # Process Key (ESC: end) #################################################
+        key = cv.waitKey(10)
+        if key == 27:  # ESC
+            break
+        number, mode = select_mode(key, mode)
+
+        # Camera capture #####################################################
+        ret, image = cap.read()
+        if not ret:
+            break
+        image = cv.flip(image, 1)  # Mirror display
+        debug_image = copy.deepcopy(image)
+
+        # Detection implementation #############################################################
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+
+        image.flags.writeable = False
+        results = hands.process(image)
+        image.flags.writeable = True
+
+        #  ####################################################################
+        if results.multi_hand_landmarks is not None:
+            for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
+                                                  results.multi_handedness):
+                # Bounding box calculation
+                brect = calc_bounding_rect(debug_image, hand_landmarks)
+                # Landmark calculation
+                landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+
+                # Conversion to relative coordinates / normalized coordinates
+                pre_processed_landmark_list = pre_process_landmark(
+                    landmark_list)
+                pre_processed_point_history_list = pre_process_point_history(
+                    debug_image, point_history)
+                # Write to the dataset file
+                logging_csv(number, mode, pre_processed_landmark_list,
+                            pre_processed_point_history_list)
+
+                # Hand sign classification
+                hand_sign_id = keypoint_classifier(pre_processed_landmark_list) #Output number - Handsign number in list
+                if hand_sign_id == 2:  # Point gesture
+                    point_history.append(landmark_list[8])
+                else:
+                    point_history.append([0, 0])
+
+                # Finger gesture classification
+                finger_gesture_id = 0
+                point_history_len = len(pre_processed_point_history_list)
+                if point_history_len == (history_length * 2):
+                    finger_gesture_id = point_history_classifier(
+                        pre_processed_point_history_list)
+
+                # Calculates the gesture IDs in the latest detection
+                finger_gesture_history.append(finger_gesture_id)
+                most_common_fg_id = Counter(
+                    finger_gesture_history).most_common()
+
+                # Drawing part
+                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                debug_image = draw_landmarks(debug_image, landmark_list)
+                debug_image = draw_info_text(
+                    debug_image,
+                    brect,
+                    handedness,
+                    keypoint_classifier_labels[hand_sign_id], #Output Label
+                    point_history_classifier_labels[most_common_fg_id[0][0]],
+                )
+
+                #Run sequence
+                if(hand_sign_id != 2):
+                    label = keypoint_classifier_labels[hand_sign_id]
+                    #print(type(label))
+                    #print(hand_to_seq[label])
+                    fortuneTellerStyle=(hand_to_style[label])
+        else:
+            point_history.append([0, 0])
+
+        debug_image = draw_point_history(debug_image, point_history)
+        debug_image = draw_info(debug_image, fps, mode, number)
+
+        # Screen reflection #############################################################
+        cv.imshow('Hand Gesture Recognition', debug_image)
+
+    cap.release()
+    cv.destroyAllWindows()
+
+
+    predictionsRemaining = 3
+    #conversation
+    while predictionsRemaining>0:
+            #TODO - incorporate fortuneTellerStyle
+            transcribed_text, response, old_convo = cb.run_pipline()
+            predictionsRemaining-=1
+
+ 
+
+
+
+
