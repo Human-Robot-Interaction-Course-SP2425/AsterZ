@@ -38,7 +38,7 @@ from time import sleep
 
 #global vars
 fortuneTellerStyle = "normal magic 8 ball"
-
+# voice model options: alloy, echo, fable, onyx, nova, shimmer
 
 #### Functions from chatbot_pipline.py #######
 
@@ -142,7 +142,7 @@ class ChatBot:
         )
         listener.start()
         try:
-            print("Press and hold the space bar to record a message. To stop the program, say \"End conversation.\"")
+            print("Press and hold the space bar to record a message to ask Pebbles")
             record_audio()
         except KeyboardInterrupt:
             print("Exiting...")
@@ -182,7 +182,7 @@ class ChatBot:
         )
         return response.choices[0].message.content
 
-    def text2speech(self, prompt_output, model="tts-1", voice="alloy") -> str:
+    def text2speech(self, prompt_output, model="tts-1", voice="fable") -> str:
         """
         Return:
             speech output filename
@@ -209,7 +209,7 @@ class ChatBot:
         return "speech.mp3"
 
     def run_pipline(self, speech2text_model="whisper-1", chat_model="gpt-4o-mini", text2speech_model="tts-1",
-                    text2speech_voice="alloy"):
+                    text2speech_voice="fable"):
         res = self.record_audio()
         print("---")
         # print(f"output file: {res}")
@@ -224,12 +224,12 @@ class ChatBot:
         text_response = self.prompt_gpt(transcribed_text, self.preprompt, chat_model)
         print(f"[{chat_model} response]: {text_response}")
         #~~~~Interpret Tone of Robot's Response~~~~~
-        # toneString_R =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
-        # tone_response_R = self.prompt_gpt(toneString_R,self.preprompt,chat_model)
-        #print(f"[Tone of response]: {tone_response_R}")
-        # runToneSequence(tone_response_R)
+        toneString_R =  "Please respond with \"Happy\", \"Yes\", \"No\", \"Excited\", \"Anxious\", \"Angry\",  or \"Sad\". What is the tone of this message:" + text_response
+        tone_response_R = self.prompt_gpt(toneString_R,self.preprompt,chat_model)
+        print(f"[Tone of response]: {tone_response_R}")
         self.text2speech(text_response, text2speech_model, text2speech_voice)
-        
+        runToneSequence(tone_response_R)
+
         # ~~~ Record Conversation History ~~~
         self.preprompt += f"""
         past input:
@@ -240,15 +240,15 @@ class ChatBot:
         return transcribed_text, text_response, self.preprompt
     
     def setup_pipline_style(self, speech2text_model="whisper-1", chat_model="gpt-4o-mini", text2speech_model="tts-1",
-                    text2speech_voice="alloy"):
-        res = self.record_audio()
+                    text2speech_voice="fable"):
         print("---")
         # print(f"output file: {res}")
-        setUpStylePrompt = "Please respond like you are a magic 8 ball in the style of " + fortuneTellerStyle
+        setUpStylePrompt = "Please pretend you are a magic 8 ball in the style of " + fortuneTellerStyle
         print(f"[Setup prompt]: {setUpStylePrompt}")
         # ~~~~ Interpret Tone of Human's Mesage ~~~~~
         setUpStyleResponse = self.prompt_gpt(setUpStylePrompt,self.preprompt,chat_model)
         print(f"[{chat_model} response]: {setUpStyleResponse}")
+        run_seq("happy")
         self.text2speech(setUpStyleResponse, text2speech_model, text2speech_voice)
 
         # ~~~ Record Conversation History ~~~
@@ -281,10 +281,10 @@ hand_to_style = {
     "Pointer": "William Shakespeare",
     "OK": "nerdy scientist or engineer",
     "Peace": "Gen Z slang",
-    "Love": "therapist",
+    "Love": " bibble from barbie fairytopia",
     "Scout": "Jurassic park tour guide",
     "ThumbsUp": "only respond with puns",
-    "ThumbsDown": " dr doofenshmirtz from phineas and ferb",
+    "ThumbsDown": "dr doofenshmirtz from phineas and ferb",
     "Neutral": "reset"
 }
 
@@ -740,9 +740,9 @@ if __name__ == '__main__':
     cb = ChatBot(mic_index=MIC_INDEX)
        #introduce robot
     introductionMessage = "Hi! My name is Pebbles! I am your customizable yet unreliable fortune teller! You can make hand gestures to change the vibe. " \
-    "I hereby grant you 3 magical predictions." \
-    "To select your preferred fortune style, make the corresponding gesture in the camera. Once it is detected, press the escape key"
-    cb.text2speech(introductionMessage,"tts-1","alloy")
+    "I hereby grant you 3 magical predictions!" \
+    "To select your preferred fortune style, make the corresponding gesture in the camera. Once I correctly detect your preferred gesture, please press the escape key"
+    cb.text2speech(introductionMessage,"tts-1","fable")
 
     # Select style ~~~~~~~
     while True:
@@ -820,7 +820,8 @@ if __name__ == '__main__':
                 if(hand_sign_id != 2):
                     label = keypoint_classifier_labels[hand_sign_id]
                     #print(type(label))
-                    #print(hand_to_seq[label])
+                    run_seq(hand_to_seq[label])
+
                     oldStyle = fortuneTellerStyle
                     fortuneTellerStyle=(hand_to_style[label])
                     if(fortuneTellerStyle!= oldStyle):
@@ -848,7 +849,8 @@ if __name__ == '__main__':
             transcribed_text, response, old_convo = cb.run_pipline()
             predictionsRemaining-=1
 
- 
+    closingMessage = "Your three fortunes have been told... Farewell, friend."
+    cb.text2speech(closingMessage,"tts-1","fable")
 
 
 
