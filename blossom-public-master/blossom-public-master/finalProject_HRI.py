@@ -40,6 +40,25 @@ from time import sleep
 fortuneTellerStyle = "normal magic 8 ball"
 # voice model options: alloy, echo, fable, onyx, nova, shimmer
 
+def threeDeepBreaths():
+    run_seq("reset")
+    sleep(2)
+    run_seq("sad_shrink")
+    sleep(5)
+    run_seq("azcustom/deepBreath")
+    sleep(5)
+    run_seq("sad_shrink")
+    sleep(5)
+    run_seq("azcustom/deepBreath")
+    sleep(5)
+    run_seq("sad_shrink")
+    sleep(5)
+    run_seq("azcustom/deepBreath")
+    sleep(5)
+    run_seq("sad_shrink")
+    sleep(5)
+
+
 #### Functions from chatbot_pipline.py #######
 
 def list_audio_devices():
@@ -244,6 +263,7 @@ class ChatBot:
         print("---")
         # print(f"output file: {res}")
         setUpStylePrompt = "Please pretend you are a magic 8 ball in the style of " + fortuneTellerStyle
+        setUpStylePrompt += ". Mindfulness is important, especially when fortune-telling, please ask me to take 3 deep breaths"
         print(f"[Setup prompt]: {setUpStylePrompt}")
         # ~~~~ Interpret Tone of Human's Mesage ~~~~~
         setUpStyleResponse = self.prompt_gpt(setUpStylePrompt,self.preprompt,chat_model)
@@ -842,14 +862,14 @@ if __name__ == '__main__':
 
     #configure chat model to reflect the FortuneTellerStyle setup_pipline_style
     transcribed_text, response, old_convo = cb.setup_pipline_style()
-
+    threeDeepBreaths()
     predictionsRemaining = 3
     #conversation
     while predictionsRemaining>0:
             transcribed_text, response, old_convo = cb.run_pipline()
             predictionsRemaining-=1
 
-    closingMessage = "Your three fortunes have been told... Farewell, friend."
+    closingMessage = "It was an honor to read you your three fortunes... Farewell, friend."
     cb.text2speech(closingMessage,"tts-1","fable")
 
 
