@@ -44,17 +44,17 @@ def threeDeepBreaths():
     run_seq("reset")
     sleep(2)
     run_seq("sad_shrink")
-    sleep(5)
-    run_seq("azcustom/deepBreath")
-    sleep(5)
+    sleep(2)
+    run_seq("reset")
+    sleep(2)
     run_seq("sad_shrink")
-    sleep(5)
-    run_seq("azcustom/deepBreath")
-    sleep(5)
+    sleep(2)
+    run_seq("reset")
+    sleep(2)
     run_seq("sad_shrink")
-    sleep(5)
-    run_seq("azcustom/deepBreath")
-    sleep(5)
+    sleep(2)
+    run_seq("reset")
+    sleep(2)
     run_seq("sad_shrink")
     sleep(5)
 
@@ -262,14 +262,15 @@ class ChatBot:
                     text2speech_voice="fable"):
         print("---")
         # print(f"output file: {res}")
-        setUpStylePrompt = "Please pretend you are a magic 8 ball in the style of " + fortuneTellerStyle
-        setUpStylePrompt += ". Mindfulness is important, especially when fortune-telling, please ask me to take 3 deep breaths"
+        setUpStylePrompt = "Please pretend you are a fortune teller in the style of " + fortuneTellerStyle
+        BreathMessage = "Mindfulness is important, especially when fortune-telling. Let's take some deep breaths first!"
         print(f"[Setup prompt]: {setUpStylePrompt}")
         # ~~~~ Interpret Tone of Human's Mesage ~~~~~
         setUpStyleResponse = self.prompt_gpt(setUpStylePrompt,self.preprompt,chat_model)
         print(f"[{chat_model} response]: {setUpStyleResponse}")
         run_seq("happy")
-        self.text2speech(setUpStyleResponse, text2speech_model, text2speech_voice)
+        setUpStyleResponseWithBreathMessage = setUpStyleResponse+BreathMessage
+        self.text2speech(setUpStyleResponseWithBreathMessage, text2speech_model, text2speech_voice)
 
         # ~~~ Record Conversation History ~~~
         self.preprompt += f"""
@@ -304,8 +305,8 @@ hand_to_style = {
     "Love": " bibble from barbie fairytopia",
     "Scout": "Jurassic park tour guide",
     "ThumbsUp": "only respond with puns",
-    "ThumbsDown": "dr doofenshmirtz from phineas and ferb",
-    "Neutral": "reset"
+    "ThumbsDown": "count dracula from hotel transylvania",
+    "Neutral": "normal magic 8 ball"
 }
 
 def get_args():

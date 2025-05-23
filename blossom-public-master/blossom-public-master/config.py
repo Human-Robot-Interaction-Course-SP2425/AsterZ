@@ -108,7 +108,10 @@ class RobotConfig(object):
         used_configs = []
         for port in self.ports:
            #Aster
-            if port != "COM16": #Device manager determined the robot is on COM16 when connected
+            # if port != "COM16": #Device manager determined the robot is on COM16 when connected
+            #                 continue
+            #dr berry
+            if port != "COM6": #Device manager determined the robot is on COM16 when connected
                             continue
             ##Shaina
             # if port != "COM15": #Device manager determined the robot is on COM16 when connected
